@@ -273,31 +273,45 @@ int main() {
 
             int next_waypoint = NextWaypoint(car_x, car_y, car_yaw, map_waypoints_x, map_waypoints_y);
 
-            cout<<"next_waypoint_id = "<<next_waypoint<<endl;
+            // cout<<"next_waypoint_id = "<<next_waypoint<<endl;
 
-            cout<<"car_s = "<<car_s<<endl;
+            // cout<<"car_s = "<<car_s<<endl;
             vector<double> start = {car_s, car_speed, 0};
 
-            cout<<"next_waypoint_s = "<<map_waypoints_s[next_waypoint]<<endl;
+            // cout<<"next_waypoint_s = "<<map_waypoints_s[next_waypoint]<<endl;
+            cout<<"NEXT WAYPOINT x,y = "<<map_waypoints_x[next_waypoint]<<" "<<map_waypoints_y[next_waypoint]<<endl;
             vector<double> end = {map_waypoints_s[next_waypoint], car_speed, 0};
 
-            double time_target = 5; // target time to get to the next waypoint (seconds)
-            
-            vector<double> trajectory = JMT(start, end, time_target);
+            double time_target = (map_waypoints_s[next_waypoint]-car_s)/50; // target time to get to the next waypoint (seconds) is distance to waypoint divided by target velocity
+            cout << "time_target = "<<time_target;
 
-            double dist_inc = 0.5;
-            double t_inc = 0.01;
+
+            vector<double> poly = JMT(start, end, time_target);
+
+            // double dist_inc = 0.5;
+            double t_inc = 0.005;
+
+            // vector<double> straight_x_vals;
+            // vector<double> straight_y_vals;
+
+            cout<<"car x,y = "<<car_x<<" "<<car_y<<endl;
 
             for(int i = 0; i < 50; i++)
             {
-              double next_s = car_s;
-              for (int a = 0; a < trajectory.size(); ++a)
+
+              // straight_x_vals.push_back(car_x+(dist_inc*i)*cos(deg2rad(car_yaw)));
+              // straight_y_vals.push_back(car_y+(dist_inc*i)*sin(deg2rad(car_yaw)));
+
+              // double next_s = car_s;
+              double next_s = 0;
+              for (int j = 0; j < poly.size(); ++j)
               {
-                next_s += pow(trajectory[a], a) * (t_inc * i);
+                // next_s += pow(poly[a], a) * (t_inc * i);
+                next_s += poly[j] * pow(t_inc * i, j);
               }
 
               
-              cout<<"next_s = "<<next_s<<endl;
+              // cout<<"next_s = "<<next_s<<endl;
 
               //TODO: above this looks OK...below this explodes
 
@@ -305,11 +319,13 @@ int main() {
               double next_x = next_xy[0];
               double next_y = next_xy[1];
 
-              // cout<<"x,y = "<<next_x<<" "<<next_y<<endl;
+              // cout<<"x,y strt = "<<straight_x_vals[i]<<" "<<straight_y_vals[i]<<endl;
+              cout<<"x,y traj = "<<next_x<<" "<<next_y<<endl;
 
               next_x_vals.push_back(next_x);
               next_y_vals.push_back(next_y);
             }
+            
             // exit(EXIT_FAILURE);
             
 
