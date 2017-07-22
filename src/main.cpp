@@ -7,9 +7,12 @@
 #include <vector>
 #include "Eigen-3.3/Eigen/Core"
 #include "Eigen-3.3/Eigen/QR"
+#include "Eigen-3.3/Eigen/Dense"
 #include "json.hpp"
 
 using namespace std;
+using Eigen::MatrixXd;
+using Eigen::VectorXd;
 
 // for convenience
 using json = nlohmann::json;
@@ -159,6 +162,33 @@ vector<double> getXY(double s, double d, vector<double> maps_s, vector<double> m
 
 }
 
+vector<double> JMT(vector< double> start, vector <double> end, double T) {
+  
+  MatrixXd A = MatrixXd(3, 3);
+  
+  A << T*T*T, T*T*T*T, T*T*T*T*T,
+          3*T*T, 4*T*T*T,5*T*T*T*T,
+          6*T, 12*T*T, 20*T*T*T;
+    
+  MatrixXd B = MatrixXd(3,1);     
+  B << end[0]-(start[0]+start[1]*T+.5*start[2]*T*T),
+          end[1]-(start[1]+start[2]*T),
+          end[2]-start[2];
+          
+  MatrixXd Ai = A.inverse();
+  
+  MatrixXd C = Ai*B;
+  
+  vector <double> result = {start[0], start[1], .5*start[2]};
+  
+  for(int i = 0; i < C.size(); i++)
+  {
+      result.push_back(C.data()[i]);
+  }
+  
+  return result;
+}
+
 int main() {
   uWS::Hub h;
 
@@ -240,6 +270,49 @@ int main() {
 
 
           	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
+
+            int next_waypoint = NextWaypoint(car_x, car_y, car_yaw, map_waypoints_x, map_waypoints_y);
+
+            cout<<"next_waypoint_id = "<<next_waypoint<<endl;
+
+            cout<<"car_s = "<<car_s<<endl;
+            vector<double> start = {car_s, car_speed, 0};
+
+            cout<<"next_waypoint_s = "<<map_waypoints_s[next_waypoint]<<endl;
+            vector<double> end = {map_waypoints_s[next_waypoint], car_speed, 0};
+
+            double time_target = 5; // target time to get to the next waypoint (seconds)
+            
+            vector<double> trajectory = JMT(start, end, time_target);
+
+            double dist_inc = 0.5;
+            double t_inc = 0.01;
+
+            for(int i = 0; i < 50; i++)
+            {
+              double next_s = car_s;
+              for (int a = 0; a < trajectory.size(); ++a)
+              {
+                next_s += pow(trajectory[a], a) * (t_inc * i);
+              }
+
+              
+              cout<<"next_s = "<<next_s<<endl;
+
+              //TODO: above this looks OK...below this explodes
+
+              vector<double> next_xy = getXY(next_s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+              double next_x = next_xy[0];
+              double next_y = next_xy[1];
+
+              // cout<<"x,y = "<<next_x<<" "<<next_y<<endl;
+
+              next_x_vals.push_back(next_x);
+              next_y_vals.push_back(next_y);
+            }
+            // exit(EXIT_FAILURE);
+            
+
           	msgJson["next_x"] = next_x_vals;
           	msgJson["next_y"] = next_y_vals;
 
@@ -290,83 +363,3 @@ int main() {
   }
   h.run();
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
