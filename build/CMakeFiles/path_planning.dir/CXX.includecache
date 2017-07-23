@@ -1119,6 +1119,8 @@ thread
 -
 vector
 -
+algorithm
+-
 Eigen-3.3/Eigen/Core
 /Users/kdomnitser/OneDrive - RMS/code/CarND-Path-Planning-Project/src/Eigen-3.3/Eigen/Core
 Eigen-3.3/Eigen/QR

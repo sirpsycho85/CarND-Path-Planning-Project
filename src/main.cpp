@@ -5,10 +5,12 @@
 #include <iostream>
 #include <thread>
 #include <vector>
+#include <algorithm>
 #include "Eigen-3.3/Eigen/Core"
 #include "Eigen-3.3/Eigen/QR"
 #include "Eigen-3.3/Eigen/Dense"
 #include "json.hpp"
+// #include "planner.h"
 
 using namespace std;
 using Eigen::MatrixXd;
@@ -226,13 +228,16 @@ int main() {
   	map_waypoints_dy.push_back(d_y);
   }
 
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  int num_messages = 0;
+
+  h.onMessage([&num_messages,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
     //auto sdata = string(data).substr(0, length);
     //cout << sdata << endl;
+
     if (length && length > 2 && data[0] == '4' && data[1] == '2') {
 
       auto s = hasData(data);
@@ -256,6 +261,7 @@ int main() {
           	// Previous path data given to the Planner
           	auto previous_path_x = j[1]["previous_path_x"];
           	auto previous_path_y = j[1]["previous_path_y"];
+
           	// Previous path's end s and d values 
           	double end_path_s = j[1]["end_path_s"];
           	double end_path_d = j[1]["end_path_d"];
@@ -271,61 +277,85 @@ int main() {
 
           	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
 
-            int next_waypoint = NextWaypoint(car_x, car_y, car_yaw, map_waypoints_x, map_waypoints_y);
+            // Take previous path data into account
 
-            // cout<<"next_waypoint_id = "<<next_waypoint<<endl;
+            int path_size = previous_path_x.size();
+            
+            for(int i = 0; i < path_size; i++)
+            {
+                next_x_vals.push_back(previous_path_x[i]);
+                next_y_vals.push_back(previous_path_y[i]);
+            }
 
-            // cout<<"car_s = "<<car_s<<endl;
-            vector<double> start = {car_s, car_speed, 0};
+            double pos_x;
+            double pos_y;
+            double angle;
 
-            // cout<<"next_waypoint_s = "<<map_waypoints_s[next_waypoint]<<endl;
-            cout<<"NEXT WAYPOINT x,y = "<<map_waypoints_x[next_waypoint]<<" "<<map_waypoints_y[next_waypoint]<<endl;
-            vector<double> end = {map_waypoints_s[next_waypoint], car_speed, 0};
+            if(path_size == 0)
+            {
+                pos_x = car_x;
+                pos_y = car_y;
+                angle = deg2rad(car_yaw);
+            }
+            else
+            {
+                pos_x = previous_path_x[path_size-1];
+                pos_y = previous_path_y[path_size-1];
 
-            double time_target = (map_waypoints_s[next_waypoint]-car_s)/50; // target time to get to the next waypoint (seconds) is distance to waypoint divided by target velocity
-            cout << "time_target = "<<time_target;
+                double pos_x2 = previous_path_x[path_size-2];
+                double pos_y2 = previous_path_y[path_size-2];
+                angle = atan2(pos_y-pos_y2,pos_x-pos_x2);
+            }
 
+            // ------
+
+            // int next_waypoint = NextWaypoint(car_x, car_y, car_yaw, map_waypoints_x, map_waypoints_y);
+            int next_waypoint = NextWaypoint(pos_x, pos_y, angle, map_waypoints_x, map_waypoints_y);
+            
+            next_waypoint++;
+
+            vector<double> pos_sd = getFrenet(pos_x, pos_y, angle, map_waypoints_x, map_waypoints_y);
+            double pos_s = pos_sd[0];
+
+            // vector<double> start = {car_s, car_speed, 0};
+            vector<double> start = {pos_s, car_speed, 0};
+
+            double speed_limit = 25;
+            double target_speed = min(car_speed+5, speed_limit);
+            target_speed=25;
+
+            // cout<<"car speed = "<<car_speed<<", target speed = "<<target_speed<<endl;
+
+            vector<double> end = {map_waypoints_s[next_waypoint], target_speed, 0};
+
+            double time_target = (map_waypoints_s[next_waypoint]-car_s)/target_speed; // target time to get to the next waypoint (seconds) is distance to waypoint divided by target velocity
 
             vector<double> poly = JMT(start, end, time_target);
 
-            // double dist_inc = 0.5;
-            double t_inc = 0.005;
+            // double t_inc = time_target/25;
+            double t_inc = 0.02;
 
-            // vector<double> straight_x_vals;
-            // vector<double> straight_y_vals;
+            // cout<<"distance to waypoint " << map_waypoints_s[next_waypoint]-car_s << endl;
 
-            cout<<"car x,y = "<<car_x<<" "<<car_y<<endl;
-
-            for(int i = 0; i < 50; i++)
+            for(int i = 0; i < 50 - path_size; i++)
             {
-
-              // straight_x_vals.push_back(car_x+(dist_inc*i)*cos(deg2rad(car_yaw)));
-              // straight_y_vals.push_back(car_y+(dist_inc*i)*sin(deg2rad(car_yaw)));
-
-              // double next_s = car_s;
               double next_s = 0;
               for (int j = 0; j < poly.size(); ++j)
               {
-                // next_s += pow(poly[a], a) * (t_inc * i);
                 next_s += poly[j] * pow(t_inc * i, j);
               }
-
-              
-              // cout<<"next_s = "<<next_s<<endl;
-
-              //TODO: above this looks OK...below this explodes
+              // cout<<next_s<<", ";
 
               vector<double> next_xy = getXY(next_s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-              double next_x = next_xy[0];
-              double next_y = next_xy[1];
 
-              // cout<<"x,y strt = "<<straight_x_vals[i]<<" "<<straight_y_vals[i]<<endl;
-              cout<<"x,y traj = "<<next_x<<" "<<next_y<<endl;
+              next_x_vals.push_back(next_xy[0]);
+              next_y_vals.push_back(next_xy[1]);
 
-              next_x_vals.push_back(next_x);
-              next_y_vals.push_back(next_y);
+              // double dist_inc = 0.5;
+              // next_x_vals.push_back(car_x+(dist_inc*i)*cos(deg2rad(car_yaw)));
+              // next_y_vals.push_back(car_y+(dist_inc*i)*sin(deg2rad(car_yaw)));
             }
-            
+            // cout<<endl;
             // exit(EXIT_FAILURE);
             
 
