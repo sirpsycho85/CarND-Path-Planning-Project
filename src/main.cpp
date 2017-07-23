@@ -277,9 +277,15 @@ int main() {
 
           	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
 
+            // config
+            int num_points = 200;
+            int max_reused_points = 200;
+
             // Take previous path data into account
 
-            int path_size = previous_path_x.size();
+            int previous_path_size = previous_path_x.size();
+            int path_size = min(previous_path_size, max_reused_points);
+            cout << path_size << endl;
             
             for(int i = 0; i < path_size; i++)
             {
@@ -337,7 +343,7 @@ int main() {
 
             // cout<<"distance to waypoint " << map_waypoints_s[next_waypoint]-car_s << endl;
 
-            for(int i = 0; i < 50 - path_size; i++)
+            for(int i = 0; i < num_points - path_size; i++)
             {
               double next_s = 0;
               for (int j = 0; j < poly.size(); ++j)
