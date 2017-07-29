@@ -1,29 +1,34 @@
 #include "planner.h"
 #include "json.hpp"
 
+using namespace std;
+
 Planner::Planner() {}
 Planner::~Planner() {}
 
-void Planner::update_telemetry(auto j) {
-  
-  // Main car's localization Data
-  car_x = j[1]["x"];
-  car_y = j[1]["y"];
-  car_s = j[1]["s"];
-  car_d = j[1]["d"];
-  car_yaw = j[1]["yaw"];
-  car_speed = j[1]["speed"];
+void Planner::update_telemetry(map<std::string,double> car_data_doubles, map<std::string,auto> car_data_vectors) {
 
-  // Previous path data given to the Planner
-  previous_path_x = j[1]["previous_path_x"];
-  previous_path_y = j[1]["previous_path_y"];
+  car_data_doubles_ = car_data_doubles;
+  car_data_vectors_ = car_data_vectors;
   
-  // Previous path's end s and d values 
-  end_path_s = j[1]["end_path_s"];
-  end_path_d = j[1]["end_path_d"];
+  // // Main car's localization Data
+  // car_x = j[1]["x"];
+  // car_y = j[1]["y"];
+  // car_s = j[1]["s"];
+  // car_d = j[1]["d"];
+  // car_yaw = j[1]["yaw"];
+  // car_speed = j[1]["speed"];
 
-  // Sensor Fusion Data, a list of all other cars on the same side of the road.
-  sensor_fusion = j[1]["sensor_fusion"];
+  // // Previous path data given to the Planner
+  // previous_path_x = j[1]["previous_path_x"];
+  // previous_path_y = j[1]["previous_path_y"];
+  
+  // // Previous path's end s and d values 
+  // end_path_s = j[1]["end_path_s"];
+  // end_path_d = j[1]["end_path_d"];
+
+  // // Sensor Fusion Data, a list of all other cars on the same side of the road.
+  // sensor_fusion = j[1]["sensor_fusion"];
 }
 
 /*

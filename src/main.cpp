@@ -10,7 +10,11 @@
 #include "Eigen-3.3/Eigen/QR"
 #include "Eigen-3.3/Eigen/Dense"
 #include "json.hpp"
+
 // #include "planner.h"
+
+#include <typeinfo>
+#include <map>
 
 using namespace std;
 using Eigen::MatrixXd;
@@ -208,6 +212,11 @@ int main() {
 
   ifstream in_map_(map_file_.c_str(), ifstream::in);
 
+  ofstream log_data;
+  log_data.open("log_data.txt");
+  log_data << "testing!";
+  log_data.close();
+
   string line;
   while (getline(in_map_, line)) {
   	istringstream iss(line);
@@ -230,13 +239,12 @@ int main() {
 
   int num_messages = 0;
 
-  h.onMessage([&num_messages,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&log_data,&num_messages,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
     //auto sdata = string(data).substr(0, length);
-    //cout << sdata << endl;
 
     if (length && length > 2 && data[0] == '4' && data[1] == '2') {
 
@@ -249,137 +257,175 @@ int main() {
         
         if (event == "telemetry") {
           // j[1] is the data JSON object
+
+          // cout<<typeid(j[1]["previous_path_x"]).name() << endl;
           
         	// Main car's localization Data
-          	double car_x = j[1]["x"];
-          	double car_y = j[1]["y"];
-          	double car_s = j[1]["s"];
-          	double car_d = j[1]["d"];
-          	double car_yaw = j[1]["yaw"];
-          	double car_speed = j[1]["speed"];
+        	double car_x = j[1]["x"];
+        	double car_y = j[1]["y"];
+        	double car_s = j[1]["s"];
+        	double car_d = j[1]["d"];
+        	double car_yaw = j[1]["yaw"];
+        	double car_speed = j[1]["speed"];
 
-          	// Previous path data given to the Planner
-          	auto previous_path_x = j[1]["previous_path_x"];
-          	auto previous_path_y = j[1]["previous_path_y"];
+        	// Previous path data given to the Planner
+        	auto previous_path_x = j[1]["previous_path_x"];
+        	auto previous_path_y = j[1]["previous_path_y"];
 
-          	// Previous path's end s and d values 
-          	double end_path_s = j[1]["end_path_s"];
-          	double end_path_d = j[1]["end_path_d"];
+        	// Previous path's end s and d values 
+        	double end_path_s = j[1]["end_path_s"];
+        	double end_path_d = j[1]["end_path_d"];
 
-          	// Sensor Fusion Data, a list of all other cars on the same side of the road.
-          	auto sensor_fusion = j[1]["sensor_fusion"];
+        	// Sensor Fusion Data, a list of all other cars on the same side of the road.
+        	auto sensor_fusion = j[1]["sensor_fusion"];
 
-          	json msgJson;
-
-          	vector<double> next_x_vals;
-          	vector<double> next_y_vals;
+        	json msgJson;
 
 
-          	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
+          map<std::string,double> car_data_doubles;
+          car_data_doubles["car_x"] = car_x;
+          car_data_doubles["car_y"] = car_y;
+          car_data_doubles["car_s"] = car_s;
+          car_data_doubles["car_d"] = car_d;
+          car_data_doubles["car_yaw"] = car_yaw;
+          car_data_doubles["car_speed"] = car_speed;
+          car_data_doubles["end_path_s"] = end_path_s;
+          car_data_doubles["end_path_d"] = end_path_d;
 
-            // config
-            int num_points = 200;
-            int max_reused_points = 200;
+          // map<std::string,auto> car_data_vectors;
+          // car_data_vectors["previous_path_x"] = previous_path_x;
+          // car_data_vectors["previous_path_y"] = previous_path_y;
+          // car_data_vectors["sensor_fusion"] = sensor_fusion;
 
-            // Take previous path data into account
+          // Planner pln;
+          // pln.update_telemetry(car_data_doubles, car_data_vectors);
 
-            int previous_path_size = previous_path_x.size();
-            int path_size = min(previous_path_size, max_reused_points);
-            cout << path_size << endl;
-            
-            for(int i = 0; i < path_size; i++)
-            {
-                next_x_vals.push_back(previous_path_x[i]);
-                next_y_vals.push_back(previous_path_y[i]);
-            }
 
-            double pos_x;
-            double pos_y;
-            double angle;
+          // TODO: try to fake the next waypoint as lying straight ahead
+          // TODO: try the spline approach
+        	
+          int num_pts = 50;
+          int max_pts_to_reuse = 0;
 
-            if(path_size == 0)
-            {
-                pos_x = car_x;
-                pos_y = car_y;
-                angle = deg2rad(car_yaw);
-            }
-            else
-            {
-                pos_x = previous_path_x[path_size-1];
-                pos_y = previous_path_y[path_size-1];
+          int num_previous_pts_used = previous_path_x.size();
+          int num_pts_to_reuse = min(num_previous_pts_used, max_pts_to_reuse);
 
-                double pos_x2 = previous_path_x[path_size-2];
-                double pos_y2 = previous_path_y[path_size-2];
-                angle = atan2(pos_y-pos_y2,pos_x-pos_x2);
-            }
-
-            // ------
-
-            // int next_waypoint = NextWaypoint(car_x, car_y, car_yaw, map_waypoints_x, map_waypoints_y);
-            int next_waypoint = NextWaypoint(pos_x, pos_y, angle, map_waypoints_x, map_waypoints_y);
-            
-            next_waypoint++;
-
-            vector<double> pos_sd = getFrenet(pos_x, pos_y, angle, map_waypoints_x, map_waypoints_y);
-            double pos_s = pos_sd[0];
-
-            // vector<double> start = {car_s, car_speed, 0};
-            vector<double> start = {pos_s, car_speed, 0};
-
-            double speed_limit = 25;
-            double target_speed = min(car_speed+5, speed_limit);
-            target_speed=25;
-
-            // cout<<"car speed = "<<car_speed<<", target speed = "<<target_speed<<endl;
-
-            vector<double> end = {map_waypoints_s[next_waypoint], target_speed, 0};
-
-            double time_target = (map_waypoints_s[next_waypoint]-car_s)/target_speed; // target time to get to the next waypoint (seconds) is distance to waypoint divided by target velocity
-
-            vector<double> poly = JMT(start, end, time_target);
-
-            // double t_inc = time_target/25;
-            double t_inc = 0.02;
-
-            // cout<<"distance to waypoint " << map_waypoints_s[next_waypoint]-car_s << endl;
-
-            for(int i = 0; i < num_points - path_size; i++)
-            {
-              double next_s = 0;
-              for (int j = 0; j < poly.size(); ++j)
-              {
-                next_s += poly[j] * pow(t_inc * i, j);
-              }
-              // cout<<next_s<<", ";
-
-              vector<double> next_xy = getXY(next_s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-
-              next_x_vals.push_back(next_xy[0]);
-              next_y_vals.push_back(next_xy[1]);
-
-              // double dist_inc = 0.5;
-              // next_x_vals.push_back(car_x+(dist_inc*i)*cos(deg2rad(car_yaw)));
-              // next_y_vals.push_back(car_y+(dist_inc*i)*sin(deg2rad(car_yaw)));
-            }
-            // cout<<endl;
-            // exit(EXIT_FAILURE);
-            
-
-          	msgJson["next_x"] = next_x_vals;
-          	msgJson["next_y"] = next_y_vals;
-
-          	auto msg = "42[\"control\","+ msgJson.dump()+"]";
-
-          	//this_thread::sleep_for(chrono::milliseconds(1000));
-          	ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+          vector<double> next_x_vals;
+        	vector<double> next_y_vals;
           
+          for(int i = 0; i < num_pts_to_reuse; i++)
+          {
+            next_x_vals.push_back(previous_path_x[i]);
+            next_y_vals.push_back(previous_path_y[i]);
+          }
+
+          double pos_x;
+          double pos_y;
+          double angle;
+
+          if(num_pts_to_reuse == 0)
+          {
+            pos_x = car_x;
+            pos_y = car_y;
+            angle = deg2rad(car_yaw);
+          }
+          else if (num_pts_to_reuse == 1)
+          {
+            pos_x = previous_path_x[num_pts_to_reuse-1];
+            pos_y = previous_path_y[num_pts_to_reuse-1];
+            angle = atan2(pos_y-car_y,pos_x-car_x);
+          }
+          else
+          {
+            pos_x = previous_path_x[num_pts_to_reuse-1];
+            pos_y = previous_path_y[num_pts_to_reuse-1];
+
+            double pos_x2 = previous_path_x[num_pts_to_reuse-2];
+            double pos_y2 = previous_path_y[num_pts_to_reuse-2];
+            angle = atan2(pos_y-pos_y2,pos_x-pos_x2);
+          }
+
+          int next_waypoint = NextWaypoint(pos_x, pos_y, angle, map_waypoints_x, map_waypoints_y);
+
+          vector<double> pos_sd = getFrenet(pos_x, pos_y, angle, map_waypoints_x, map_waypoints_y);
+
+          double pos_s = pos_sd[0];
+
+cout << num_messages << ":\t" << car_s << "\t\t" << pos_s << "\t\t" << car_yaw << endl;
+
+          vector<double> start = {pos_s, car_speed, 0};
+
+          double speed_limit = 25;
+          
+          double target_speed = min(car_speed+1, speed_limit);
+
+          vector<double> end = {map_waypoints_s[next_waypoint], target_speed, 0};
+
+          double time_to_target = (map_waypoints_s[next_waypoint]-car_s)/target_speed;
+
+          vector<double> poly = JMT(start, end, time_to_target);
+
+          double t_inc = 0.01;
+
+          double dist_inc = 0.1;
+
+          for(int i = 0; i < num_pts - num_pts_to_reuse; i++)
+          {
+            double next_s = 0;
+            // for (int j = 0; j < poly.size(); ++j)
+            // {
+            //   next_s += poly[j] * pow(t_inc * i, j);
+            // }
+
+            // vector<double> next_xy = getXY(next_s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+
+            next_s = pos_s + dist_inc * i;
+            vector<double> next_xy = getXY(next_s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+
+            next_x_vals.push_back(next_xy[0]);
+            next_y_vals.push_back(next_xy[1]);
+
+          // ------ DRIVE ALONG STRAIGHT PATH
+
+            // next_x_vals.push_back(car_x+(dist_inc*i)*cos(deg2rad(car_yaw)));
+            // next_y_vals.push_back(car_y+(dist_inc*i)*sin(deg2rad(car_yaw)));
+          }
+
+          // for (int i = 0; i < next_x_vals.size(); ++i)
+          // {
+          //   cout << next_x_vals[i] << ", ";
+          // }
+          // cout << endl;
+
+
+          // ------ DRIVE ALONG STRAIGHT PATH
+
+          // for(int i = 0; i < num_pts - num_pts_to_reuse; i++)
+          // {
+          //   double dist_inc = 0.2;
+          //   next_x_vals.push_back(car_x+(dist_inc*i)*cos(deg2rad(car_yaw)));
+          //   next_y_vals.push_back(car_y+(dist_inc*i)*sin(deg2rad(car_yaw)));
+          // }
+
+          // exit(EXIT_FAILURE);
+          
+
+        	msgJson["next_x"] = next_x_vals;
+        	msgJson["next_y"] = next_y_vals;
+
+        	auto msg = "42[\"control\","+ msgJson.dump()+"]";
+
+        	//this_thread::sleep_for(chrono::milliseconds(1000));
+        	ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
-      } else {
+      }
+      else {
         // Manual driving
         std::string msg = "42[\"manual\",{}]";
         ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
       }
     }
+    num_messages++;
   });
 
   // We don't need this since we're not using HTTP but if it's removed the
