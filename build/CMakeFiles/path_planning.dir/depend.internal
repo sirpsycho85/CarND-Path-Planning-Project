@@ -215,6 +215,7 @@ CMakeFiles/path_planning.dir/src/main.cpp.o
  /Users/kdomnitser/OneDrive - RMS/code/CarND-Path-Planning-Project/src/Eigen-3.3/Eigen/src/plugins/MatrixCwiseUnaryOps.h
  /Users/kdomnitser/OneDrive - RMS/code/CarND-Path-Planning-Project/src/json.hpp
  /Users/kdomnitser/OneDrive - RMS/code/CarND-Path-Planning-Project/src/main.cpp
+ /Users/kdomnitser/OneDrive - RMS/code/CarND-Path-Planning-Project/src/spline.h
  /usr/local/include/pthread-barrier.h
  /usr/local/include/uWS/Extensions.h
  /usr/local/include/uWS/Group.h

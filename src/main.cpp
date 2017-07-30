@@ -10,6 +10,7 @@
 #include "Eigen-3.3/Eigen/QR"
 #include "Eigen-3.3/Eigen/Dense"
 #include "json.hpp"
+#include "spline.h"
 
 // #include "planner.h"
 
@@ -236,10 +237,17 @@ int main() {
   	map_waypoints_dx.push_back(d_x);
   	map_waypoints_dy.push_back(d_y);
   }
+  
+  tk::spline sx, sy;
+  sx.set_points(map_waypoints_s, map_waypoints_x);
+  sy.set_points(map_waypoints_s, map_waypoints_y);
+  // double my_s = 496.015548706055;
+  // printf("x,y at %f is %f, %f\n", my_s, sx(my_s), sy(my_s));
+  // exit(EXIT_FAILURE);
 
   int num_messages = 0;
 
-  h.onMessage([&log_data,&num_messages,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&sx,&sy,&log_data,&num_messages,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -304,19 +312,26 @@ int main() {
           // TODO: try to fake the next waypoint as lying straight ahead
           // TODO: try the spline approach
         	
-          int num_pts = 50;
-          int max_pts_to_reuse = 0;
+          int num_pts = 10;
+          int max_pts_to_reuse = 3;
 
           int num_previous_pts_used = previous_path_x.size();
           int num_pts_to_reuse = min(num_previous_pts_used, max_pts_to_reuse);
 
           vector<double> next_x_vals;
         	vector<double> next_y_vals;
+          vector<double> next_s_vals;
+
+          double next_s;
           
           for(int i = 0; i < num_pts_to_reuse; i++)
           {
             next_x_vals.push_back(previous_path_x[i]);
             next_y_vals.push_back(previous_path_y[i]);
+            
+            vector<double> pos_sd = getFrenet(previous_path_x[i], previous_path_y[i], deg2rad(car_yaw), map_waypoints_x, map_waypoints_y);
+            next_s = pos_sd[0];
+            next_s_vals.push_back(next_s);
           }
 
           double pos_x;
@@ -345,33 +360,43 @@ int main() {
             angle = atan2(pos_y-pos_y2,pos_x-pos_x2);
           }
 
-          int next_waypoint = NextWaypoint(pos_x, pos_y, angle, map_waypoints_x, map_waypoints_y);
+          // int next_waypoint = NextWaypoint(pos_x, pos_y, angle, map_waypoints_x, map_waypoints_y);
 
           vector<double> pos_sd = getFrenet(pos_x, pos_y, angle, map_waypoints_x, map_waypoints_y);
 
           double pos_s = pos_sd[0];
 
-cout << num_messages << ":\t" << car_s << "\t\t" << pos_s << "\t\t" << car_yaw << endl;
+// cout << num_messages << ":\t" << car_s << "\t\t" << pos_s << "\t\t" << car_yaw << endl;
 
           vector<double> start = {pos_s, car_speed, 0};
 
-          double speed_limit = 25;
-          
-          double target_speed = min(car_speed+1, speed_limit);
+          double speed_limit = 50;
+          double acc_limit = 5;
+          double time_to_target = 1;
+          double target_speed = min(car_speed + acc_limit * time_to_target, speed_limit);
+          double target_s = pos_s + target_speed * time_to_target;
 
-          vector<double> end = {map_waypoints_s[next_waypoint], target_speed, 0};
+          // vector<double> end = {map_waypoints_s[next_waypoint], target_speed, 0};
+          // double time_to_target = (map_waypoints_s[next_waypoint]-car_s)/target_speed;
 
-          double time_to_target = (map_waypoints_s[next_waypoint]-car_s)/target_speed;
+          vector<double> end = {target_s, target_speed, 0};
 
           vector<double> poly = JMT(start, end, time_to_target);
 
-          double t_inc = 0.01;
+          double t_inc = 0.02;
 
           double dist_inc = 0.1;
 
           for(int i = 0; i < num_pts - num_pts_to_reuse; i++)
           {
-            double next_s = 0;
+            next_s = pos_s + dist_inc * (i+1);
+            double next_x = sx(next_s);
+            double next_y = sy(next_s);
+            next_s_vals.push_back(next_s);
+            next_x_vals.push_back(next_x);
+            next_y_vals.push_back(next_y);
+
+            // double next_s = 0;
             // for (int j = 0; j < poly.size(); ++j)
             // {
             //   next_s += poly[j] * pow(t_inc * i, j);
@@ -379,11 +404,11 @@ cout << num_messages << ":\t" << car_s << "\t\t" << pos_s << "\t\t" << car_yaw <
 
             // vector<double> next_xy = getXY(next_s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
 
-            next_s = pos_s + dist_inc * i;
-            vector<double> next_xy = getXY(next_s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            // next_s = pos_s + dist_inc * i;
+            // vector<double> next_xy = getXY(next_s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
 
-            next_x_vals.push_back(next_xy[0]);
-            next_y_vals.push_back(next_xy[1]);
+            // next_x_vals.push_back(next_xy[0]);
+            // next_y_vals.push_back(next_xy[1]);
 
           // ------ DRIVE ALONG STRAIGHT PATH
 
@@ -391,11 +416,11 @@ cout << num_messages << ":\t" << car_s << "\t\t" << pos_s << "\t\t" << car_yaw <
             // next_y_vals.push_back(car_y+(dist_inc*i)*sin(deg2rad(car_yaw)));
           }
 
-          // for (int i = 0; i < next_x_vals.size(); ++i)
-          // {
-          //   cout << next_x_vals[i] << ", ";
-          // }
-          // cout << endl;
+          for (int i = 0; i < next_s_vals.size(); ++i)
+          {
+            cout << next_s_vals[i] << ", ";
+          }
+          cout << endl;
 
 
           // ------ DRIVE ALONG STRAIGHT PATH

@@ -1129,9 +1129,21 @@ Eigen-3.3/Eigen/Dense
 /Users/kdomnitser/OneDrive - RMS/code/CarND-Path-Planning-Project/src/Eigen-3.3/Eigen/Dense
 json.hpp
 /Users/kdomnitser/OneDrive - RMS/code/CarND-Path-Planning-Project/src/json.hpp
+spline.h
+/Users/kdomnitser/OneDrive - RMS/code/CarND-Path-Planning-Project/src/spline.h
 typeinfo
 -
 map
+-
+
+/Users/kdomnitser/OneDrive - RMS/code/CarND-Path-Planning-Project/src/spline.h
+cstdio
+-
+cassert
+-
+vector
+-
+algorithm
 -
 
 /usr/local/include/pthread-barrier.h
