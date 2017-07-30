@@ -213,12 +213,8 @@ int main() {
 
   ifstream in_map_(map_file_.c_str(), ifstream::in);
 
-  ofstream log_data;
-  log_data.open("log_data.txt");
-  log_data << "testing!";
-  log_data.close();
-
   string line;
+
   while (getline(in_map_, line)) {
   	istringstream iss(line);
   	double x;
@@ -237,17 +233,28 @@ int main() {
   	map_waypoints_dx.push_back(d_x);
   	map_waypoints_dy.push_back(d_y);
   }
-  
-  tk::spline sx, sy;
+
+  int lane = 3;
+  double offset = 2 + 4 * lane;
+
+  vector<double> map_waypoints_x2;
+  vector<double> map_waypoints_y2;
+
+  for (int i = 0; i < map_waypoints_x.size(); ++i)
+  {
+    map_waypoints_x2.push_back(map_waypoints_x[i] += map_waypoints_dx[i] * offset);
+    map_waypoints_y2.push_back(map_waypoints_y[i] += map_waypoints_dy[i] * offset);
+  }
+
+  tk::spline sx, sy, sx2, sy2;
   sx.set_points(map_waypoints_s, map_waypoints_x);
   sy.set_points(map_waypoints_s, map_waypoints_y);
-  // double my_s = 496.015548706055;
-  // printf("x,y at %f is %f, %f\n", my_s, sx(my_s), sy(my_s));
-  // exit(EXIT_FAILURE);
+  sx2.set_points(map_waypoints_s, map_waypoints_x2);
+  sy2.set_points(map_waypoints_s, map_waypoints_y2);
 
   int num_messages = 0;
 
-  h.onMessage([&sx,&sy,&log_data,&num_messages,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&sx,&sy,&sx2,&sy2,&num_messages,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -354,7 +361,6 @@ int main() {
           {
             pos_x = previous_path_x[num_pts_to_reuse-1];
             pos_y = previous_path_y[num_pts_to_reuse-1];
-
             double pos_x2 = previous_path_x[num_pts_to_reuse-2];
             double pos_y2 = previous_path_y[num_pts_to_reuse-2];
             angle = atan2(pos_y-pos_y2,pos_x-pos_x2);
@@ -365,8 +371,6 @@ int main() {
           vector<double> pos_sd = getFrenet(pos_x, pos_y, angle, map_waypoints_x, map_waypoints_y);
 
           double pos_s = pos_sd[0];
-
-// cout << num_messages << ":\t" << car_s << "\t\t" << pos_s << "\t\t" << car_yaw << endl;
 
           vector<double> start = {pos_s, car_speed, 0};
 
@@ -390,49 +394,19 @@ int main() {
           for(int i = 0; i < num_pts - num_pts_to_reuse; i++)
           {
             next_s = pos_s + dist_inc * (i+1);
-            double next_x = sx(next_s);
-            double next_y = sy(next_s);
+            double next_x = sx2(next_s);
+            double next_y = sy2(next_s);
             next_s_vals.push_back(next_s);
             next_x_vals.push_back(next_x);
             next_y_vals.push_back(next_y);
-
-            // double next_s = 0;
-            // for (int j = 0; j < poly.size(); ++j)
-            // {
-            //   next_s += poly[j] * pow(t_inc * i, j);
-            // }
-
-            // vector<double> next_xy = getXY(next_s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-
-            // next_s = pos_s + dist_inc * i;
-            // vector<double> next_xy = getXY(next_s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-
-            // next_x_vals.push_back(next_xy[0]);
-            // next_y_vals.push_back(next_xy[1]);
-
-          // ------ DRIVE ALONG STRAIGHT PATH
-
-            // next_x_vals.push_back(car_x+(dist_inc*i)*cos(deg2rad(car_yaw)));
-            // next_y_vals.push_back(car_y+(dist_inc*i)*sin(deg2rad(car_yaw)));
           }
+
 
           for (int i = 0; i < next_s_vals.size(); ++i)
           {
             cout << next_s_vals[i] << ", ";
           }
           cout << endl;
-
-
-          // ------ DRIVE ALONG STRAIGHT PATH
-
-          // for(int i = 0; i < num_pts - num_pts_to_reuse; i++)
-          // {
-          //   double dist_inc = 0.2;
-          //   next_x_vals.push_back(car_x+(dist_inc*i)*cos(deg2rad(car_yaw)));
-          //   next_y_vals.push_back(car_y+(dist_inc*i)*sin(deg2rad(car_yaw)));
-          // }
-
-          // exit(EXIT_FAILURE);
           
 
         	msgJson["next_x"] = next_x_vals;
