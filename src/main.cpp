@@ -196,7 +196,48 @@ vector<double> JMT(vector< double> start, vector <double> end, double T) {
   return result;
 }
 
+/*
+vector<double> get_pos_after_reuse(vector<double> car_current, auto previous_path_x, auto previous_path_y, int num_pts_to_reuse) {
+  
+  double car_x = car_current[0];
+  double car_y = car_current[1];
+  double car_yaw = car_current[2];
+
+  double pos_x, pos_y, angle;
+
+  if(num_pts_to_reuse == 0)
+  {
+    pos_x = car_x;
+    pos_y = car_y;
+    angle = deg2rad(car_yaw);
+  }
+  else if (num_pts_to_reuse == 1)
+  {
+    pos_x = previous_path_x[num_pts_to_reuse-1];
+    pos_y = previous_path_y[num_pts_to_reuse-1];
+    angle = atan2(pos_y-car_y,pos_x-car_x);
+  }
+  else
+  {
+    pos_x = previous_path_x[num_pts_to_reuse-1];
+    pos_y = previous_path_y[num_pts_to_reuse-1];
+    double pos_x2 = previous_path_x[num_pts_to_reuse-2];
+    double pos_y2 = previous_path_y[num_pts_to_reuse-2];
+    angle = atan2(pos_y-pos_y2,pos_x-pos_x2);
+  }
+
+  vector<double> pos_after_reuse;
+
+  pos_after_reuse.push_back(pos_x);
+  pos_after_reuse.push_back(pos_y);
+  pos_after_reuse.push_back(angle);
+
+  return pos_after_reuse;
+}
+*/
+
 int main() {
+
   uWS::Hub h;
 
   // Load up map values for waypoint's x,y,s and d normalized normal vectors
@@ -234,7 +275,25 @@ int main() {
   	map_waypoints_dy.push_back(d_y);
   }
 
-  int lane = 3;
+
+  // double map_x = 784.6001;
+  // double map_y = 1135.571;
+  // double map_s = 90.4504146575928;
+  // double d = 0;
+
+  // vector<double> gotten_XY = getXY(map_s, d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+  // cout << gotten_XY[0]<< " " << gotten_XY[1] << endl;
+  // cout << map_x<< " " << map_y << endl;
+
+  // vector<double> gotten_SD = getFrenet(map_x, map_y, 0, map_waypoints_x, map_waypoints_y);
+  // cout << gotten_SD[0] << endl;
+  // cout << map_s << endl;
+
+  // exit(EXIT_FAILURE);
+
+
+
+  int lane = 0;
   double offset = 2 + 4 * lane;
 
   vector<double> map_waypoints_x2;
@@ -272,8 +331,6 @@ int main() {
         
         if (event == "telemetry") {
           // j[1] is the data JSON object
-
-          // cout<<typeid(j[1]["previous_path_x"]).name() << endl;
           
         	// Main car's localization Data
         	double car_x = j[1]["x"];
@@ -296,7 +353,6 @@ int main() {
 
         	json msgJson;
 
-
           map<std::string,double> car_data_doubles;
           car_data_doubles["car_x"] = car_x;
           car_data_doubles["car_y"] = car_y;
@@ -307,38 +363,20 @@ int main() {
           car_data_doubles["end_path_s"] = end_path_s;
           car_data_doubles["end_path_d"] = end_path_d;
 
-          // map<std::string,auto> car_data_vectors;
-          // car_data_vectors["previous_path_x"] = previous_path_x;
-          // car_data_vectors["previous_path_y"] = previous_path_y;
-          // car_data_vectors["sensor_fusion"] = sensor_fusion;
-
-          // Planner pln;
-          // pln.update_telemetry(car_data_doubles, car_data_vectors);
-
-
-          // TODO: try to fake the next waypoint as lying straight ahead
-          // TODO: try the spline approach
-        	
-          int num_pts = 10;
-          int max_pts_to_reuse = 3;
-
-          int num_previous_pts_used = previous_path_x.size();
-          int num_pts_to_reuse = min(num_previous_pts_used, max_pts_to_reuse);
+          //----------- SOLUTION -------------
 
           vector<double> next_x_vals;
-        	vector<double> next_y_vals;
-          vector<double> next_s_vals;
-
-          double next_s;
+          vector<double> next_y_vals;
+        	
+          int num_pts = 10;
+          int max_pts_to_reuse = 0;
+          int num_pts_used = previous_path_x.size();
+          int num_pts_to_reuse = min(num_pts_used, max_pts_to_reuse);
           
           for(int i = 0; i < num_pts_to_reuse; i++)
           {
             next_x_vals.push_back(previous_path_x[i]);
             next_y_vals.push_back(previous_path_y[i]);
-            
-            vector<double> pos_sd = getFrenet(previous_path_x[i], previous_path_y[i], deg2rad(car_yaw), map_waypoints_x, map_waypoints_y);
-            next_s = pos_sd[0];
-            next_s_vals.push_back(next_s);
           }
 
           double pos_x;
@@ -366,48 +404,72 @@ int main() {
             angle = atan2(pos_y-pos_y2,pos_x-pos_x2);
           }
 
-          // int next_waypoint = NextWaypoint(pos_x, pos_y, angle, map_waypoints_x, map_waypoints_y);
+          // TODO: things to try:
+          // cache s values, because car_s is not equal to pos_s derived from pos_x, pos_y - even with no reuse
+          // spline to pick end, JMT to generate path, spline to convert s -> x,y
+          // ----need to cache speed and calculate it myself for the target
+          // generate new path from car current path every step and average
+          // average old values with the new ones
 
           vector<double> pos_sd = getFrenet(pos_x, pos_y, angle, map_waypoints_x, map_waypoints_y);
 
           double pos_s = pos_sd[0];
+          // double pos_s = car_s;
 
-          vector<double> start = {pos_s, car_speed, 0};
+          // printf("car_s: %f\t", car_s); //car_s is not equal to pos_s even with no reuse
 
-          double speed_limit = 50;
-          double acc_limit = 5;
-          double time_to_target = 1;
-          double target_speed = min(car_speed + acc_limit * time_to_target, speed_limit);
-          double target_s = pos_s + target_speed * time_to_target;
-
-          // vector<double> end = {map_waypoints_s[next_waypoint], target_speed, 0};
-          // double time_to_target = (map_waypoints_s[next_waypoint]-car_s)/target_speed;
-
-          vector<double> end = {target_s, target_speed, 0};
-
-          vector<double> poly = JMT(start, end, time_to_target);
 
           double t_inc = 0.02;
+          double max_a = 5;
+          double max_v = 50;
+          double traj_t = t_inc * num_pts;
+
+          double end_s = pos_s + 0.5 * max_a * traj_t * traj_t;
+          // double end_v = min(car_speed + max_a * traj_t, max_v);
+          double end_v = 5;
+
+          printf("%f\t%f\n", pos_s, end_s);
+
+          vector<double> start = {pos_s, car_speed, 0};
+          vector<double> end = {end_s, end_v, 0};
+
+          vector<double> poly = JMT(start, end, traj_t);
 
           double dist_inc = 0.1;
 
           for(int i = 0; i < num_pts - num_pts_to_reuse; i++)
           {
-            next_s = pos_s + dist_inc * (i+1);
+            // ----- JMT APPROACH
+            double next_s = 0;
+            for (int j = 0; j < poly.size(); ++j)
+            {
+              next_s += poly[j] * pow(t_inc * i, j);
+            }
+            // cout << next_s << ", "; // TODO: these points don't seem right...make sure end_s is clear.
+
+            vector<double> next_xy = getXY(next_s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            double next_x = next_xy[0];
+            double next_y = next_xy[1];
+
+
+            // -----SPLINE ONLY APPROACH
+            /*
+            double next_s = pos_s + dist_inc * (i); //TODO: why not +1?
+            
             double next_x = sx2(next_s);
             double next_y = sy2(next_s);
-            next_s_vals.push_back(next_s);
+            */
+
             next_x_vals.push_back(next_x);
             next_y_vals.push_back(next_y);
           }
+          // cout << endl;
 
-
-          for (int i = 0; i < next_s_vals.size(); ++i)
-          {
-            cout << next_s_vals[i] << ", ";
-          }
-          cout << endl;
-          
+          // for (int i = 0; i < next_x_vals.size(); ++i)
+          // {
+          //   cout << next_x_vals[i] << ", ";
+          // }
+          // cout<<endl;
 
         	msgJson["next_x"] = next_x_vals;
         	msgJson["next_y"] = next_y_vals;
