@@ -411,6 +411,10 @@ int main() {
           // generate new path from car current path every step and average
           // average old values with the new ones
 
+          int next_waypoint = NextWaypoint(pos_x, pos_y, angle, map_waypoints_x, map_waypoints_y);
+            
+          next_waypoint++;
+
           vector<double> pos_sd = getFrenet(pos_x, pos_y, angle, map_waypoints_x, map_waypoints_y);
 
           double pos_s = pos_sd[0];
@@ -421,17 +425,21 @@ int main() {
 
           double t_inc = 0.02;
           double max_a = 5;
-          double max_v = 50;
-          double traj_t = t_inc * num_pts;
+          double max_v = 25;
+          // double traj_t = t_inc * num_pts;
 
-          double end_s = pos_s + 0.5 * max_a * traj_t * traj_t;
+          
           // double end_v = min(car_speed + max_a * traj_t, max_v);
-          double end_v = 5;
+          double end_v = 25;
 
-          printf("%f\t%f\n", pos_s, end_s);
+          // printf("%f\t%f\n", pos_s, end_s);
+          double traj_t = (map_waypoints_s[next_waypoint]-car_s)/end_v;
+          double end_s = pos_s + 0.5 * max_a * traj_t * traj_t;
+          cout << map_waypoints_s[next_waypoint] << endl;
 
           vector<double> start = {pos_s, car_speed, 0};
-          vector<double> end = {end_s, end_v, 0};
+          // vector<double> end = {end_s, end_v, 0};
+          vector<double> end = {map_waypoints_s[next_waypoint], end_v, 0};
 
           vector<double> poly = JMT(start, end, traj_t);
 
@@ -463,7 +471,7 @@ int main() {
             next_x_vals.push_back(next_x);
             next_y_vals.push_back(next_y);
           }
-          // cout << endl;
+          cout << endl;
 
           // for (int i = 0; i < next_x_vals.size(); ++i)
           // {
