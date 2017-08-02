@@ -315,8 +315,9 @@ int main() {
 
   vector<double> cached_s = {};
   double start_v = 0;
+  double end_v = 0;
 
-  h.onMessage([&start_v,&cached_s,&sx,&sy,&sx2,&sy2,&num_messages,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&start_v,&end_v,&cached_s,&sx,&sy,&sx2,&sy2,&num_messages,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -361,7 +362,7 @@ int main() {
           vector<double> next_x_vals;
           vector<double> next_y_vals;
         	
-          int num_pts = 200;
+          int num_pts = 100;
           int max_pts_to_reuse = 0;
           // int num_pts_used = previous_path_x.size();
           int num_pts_used = cached_s.size() - previous_path_x.size(); // 0 - 0 = 0
@@ -460,7 +461,9 @@ int main() {
           vector<double> start = {pos_s, start_v, 0};
           vector<double> end = {end_s, end_v, 0};
           // vector<double> end = {map_waypoints_s[next_waypoint], end_v, 0};
-          start_v = end_v;
+
+          double last_v = min(start_v + max_a * t_inc * num_pts_used, max_v);
+          start_v = last_v;
 
           vector<double> poly = JMT(start, end, traj_t);
 
