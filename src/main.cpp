@@ -23,7 +23,6 @@ Dxy > Ds, means you are turning, thus travelling a bigger distance. So the speed
 So to compensate you should tell the vehicle to scale down the velocity by that factor (Ds / Dxy) OR , you can apply that directy to the distance you tell it to travel (more accurate )
 
 // TODO: things to try:
-  // cache s values, because car_s is not equal to pos_s derived from pos_x, pos_y - even with no reuse
   // spline to pick end, JMT to generate path, spline to convert s -> x,y
   // ----need to cache speed and calculate it myself for the target
   // generate new path from car current path every step and average
@@ -328,111 +327,110 @@ int main() {
 
         	json msgJson;
 
+
           //----------- SOLUTION -------------
+
 
           vector<double> next_x_vals;
           vector<double> next_y_vals;
+          double max_a;
+          double max_v;
+          double traj_t;
+          double end_v;
+          double end_s;
+          vector<double> start;
+          vector<double> end;
+          vector<double> poly;
+          vector<double> temp_cached_s;
+          int num_pts;
+          int max_pts_to_reuse;
+          int num_pts_used;
+          int num_pts_unused;
+          int num_pts_to_reuse;
+          double t_inc;
+
+
         	
-          int num_pts = 100;
-          int max_pts_to_reuse = 0;
+          num_pts = 100;
 
-          double t_inc = 0.02;
+          max_pts_to_reuse = 20;
 
-          int num_pts_used = cached_s.size() - previous_path_x.size();
-          int num_pts_unused = cached_s.size() - num_pts_used;
+          t_inc = 0.02;
 
-          int num_pts_to_reuse = min(num_pts_unused, max_pts_to_reuse);
+          num_pts_used = cached_s.size() - previous_path_x.size(); // 0
+
+          num_pts_unused = previous_path_x.size(); // 0
+
+          num_pts_to_reuse = min(num_pts_unused, max_pts_to_reuse); // 0
+
+          if (num_pts_used >= 2) // start_v = 0
+          {
+            start_v = (cached_s[num_pts_used - 1] - cached_s[num_pts_used - 2]) / t_inc;
+          }
+
+          max_a = 2;
           
-
-          int start_index = num_pts_used - 1;
-          int end_index = start_index + num_pts_to_reuse;
-          vector<double>temp_cached_s = {};
-
-          for (int i = start_index; i < end_index; ++i)
-          {
-            temp_cached_s.push_back(cached_s[i]);
-
-            double next_x = sx2(cached_s[i]);
-            double next_y = sy2(cached_s[i]);
-            next_x_vals.push_back(next_x);
-            next_y_vals.push_back(next_y);
-          }
-
-          if (num_pts_to_reuse >= 2)
-          {
-            start_v = (cached_s[num_pts_to_reuse - 1] - cached_s[num_pts_to_reuse - 2]) / t_inc;
-          }
-
-          cached_s = temp_cached_s;
-
-          double pos_x;
-          double pos_y;
-          double angle;
-          double pos_s;
-
-          if(num_pts_to_reuse == 0)
-          {
-            pos_x = car_x;
-            pos_y = car_y;
-            angle = deg2rad(car_yaw);
-
-            pos_s = car_s;
-          }
-          else if (num_pts_to_reuse == 1)
-          {
-            pos_x = previous_path_x[num_pts_to_reuse-1];
-            pos_y = previous_path_y[num_pts_to_reuse-1];
-            angle = atan2(pos_y-car_y,pos_x-car_x);
-
-            pos_s = cached_s[cached_s.size() - 1];
-          }
-          else
-          {
-            pos_x = previous_path_x[num_pts_to_reuse-1];
-            pos_y = previous_path_y[num_pts_to_reuse-1];
-            double pos_x2 = previous_path_x[num_pts_to_reuse-2];
-            double pos_y2 = previous_path_y[num_pts_to_reuse-2];
-            angle = atan2(pos_y-pos_y2,pos_x-pos_x2);
-
-            pos_s = cached_s[cached_s.size() - 1];
-          }
-
-          double max_a = 2;
-          double max_v = 10;
-          double traj_t = t_inc * num_pts;
-
+          max_v = 20;
           
-          // double end_v = min(car_speed + max_a * traj_t, max_v);
-          // double end_v = 5;
-          double end_v = min(start_v + max_a * traj_t, max_v);
+          traj_t = t_inc * num_pts;
+
+          end_v = min(start_v + max_a * traj_t, max_v);
           
-          double end_s = pos_s + (start_v + end_v)/2 * traj_t;
+          // TODO: should I change this back?
+          // end_s = car_s + (start_v + end_v)/2 * traj_t;
+          end_s = car_s + end_v * traj_t;
           
-          vector<double> start = {pos_s, start_v, 0};
-          vector<double> end = {end_s, end_v, 0};
+          start = {car_s, start_v, 0};
+          
+          end = {end_s, end_v, 0};
 
-          double last_v = min(start_v + max_a * t_inc * num_pts_used, max_v);
-          start_v = last_v;
+          poly = JMT(start, end, traj_t);
 
-          vector<double> poly = JMT(start, end, traj_t);
+          temp_cached_s = {};
 
-          for(int i = 0; i < num_pts - num_pts_to_reuse; i++)
+          for(int i = 0; i < num_pts; i++)
           {
-            double next_s = 0;
-            
+            double next_s;
+
+            next_s = 0;
+
             for (int j = 0; j < poly.size(); ++j)
             {
               next_s += poly[j] * pow(t_inc * i, j);
             }
-            
-            cached_s.push_back(next_s);
-            
-            double next_x = sx2(next_s);
-            double next_y = sy2(next_s);
+
+            temp_cached_s.push_back(next_s);
+          }
+
+          // average with cached points
+
+          for (int i = 0; i < num_pts_to_reuse; ++i)
+          {
+            temp_cached_s[i] = (temp_cached_s[i] + cached_s[i + num_pts_used])/2;
+            cout << temp_cached_s[i] << "\t" << cached_s[i + num_pts_used] << "\t" << (temp_cached_s[i] + cached_s[i + num_pts_used])/2 <<  endl;
+          }
+          cout << endl;
+
+          for(int i = 0; i < num_pts; i++)
+          {
+            double next_x;
+            double next_y;
+
+            next_x = sx2(temp_cached_s[i]);
+            next_y = sy2(temp_cached_s[i]);
 
             next_x_vals.push_back(next_x);
             next_y_vals.push_back(next_y);
+
+            if (i < 10)
+            {
+              // cout << temp_cached_s[i] << ", ";
+            }
+            
           }
+          // cout << endl;
+
+          cached_s = temp_cached_s;
 
           // for (int i = 0; i < next_x_vals.size(); ++i)
           // {
