@@ -23,10 +23,7 @@ Dxy > Ds, means you are turning, thus travelling a bigger distance. So the speed
 So to compensate you should tell the vehicle to scale down the velocity by that factor (Ds / Dxy) OR , you can apply that directy to the distance you tell it to travel (more accurate )
 
 // TODO: things to try:
-  // spline to pick end, JMT to generate path, spline to convert s -> x,y
-  // ----need to cache speed and calculate it myself for the target
-  // generate new path from car current path every step and average
-  // average old values with the new ones
+  // Spline assumes evenly spaced waypoints but our points are not.......
   // Marcus Erbar suggested: Appending deltas of new_path to previous_path[0]. Then, as a second step, smoothing appended_path with previous_path for a couple of timesteps (I think 20). That finally got rid of the seemingly random noise.
           */
 
@@ -357,13 +354,13 @@ int main() {
 
           t_inc = 0.02;
 
-          num_pts_used = cached_s.size() - previous_path_x.size(); // 0
+          num_pts_used = cached_s.size() - previous_path_x.size();
 
-          num_pts_unused = previous_path_x.size(); // 0
+          num_pts_unused = previous_path_x.size();
 
-          num_pts_to_reuse = min(num_pts_unused, max_pts_to_reuse); // 0
+          num_pts_to_reuse = min(num_pts_unused, max_pts_to_reuse);
 
-          if (num_pts_used >= 2) // start_v = 0
+          if (num_pts_used >= 2)
           {
             start_v = (cached_s[num_pts_used - 1] - cached_s[num_pts_used - 2]) / t_inc;
           }
@@ -406,7 +403,15 @@ int main() {
 
           for (int i = 0; i < num_pts_to_reuse; ++i)
           {
-            temp_cached_s[i] = (temp_cached_s[i] + cached_s[i + num_pts_used])/2;
+            if (i == 0)
+            {
+              temp_cached_s[i] = cached_s[i + num_pts_used]; // trying to always use old point for first point
+            }
+            else
+            {
+              temp_cached_s[i] = (temp_cached_s[i] + cached_s[i + num_pts_used])/2;
+            }
+
             cout << temp_cached_s[i] << "\t" << cached_s[i + num_pts_used] << "\t" << (temp_cached_s[i] + cached_s[i + num_pts_used])/2 <<  endl;
           }
           cout << endl;
