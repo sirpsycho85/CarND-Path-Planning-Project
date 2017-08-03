@@ -315,9 +315,8 @@ int main() {
 
   vector<double> cached_s = {};
   double start_v = 0;
-  double end_v = 0;
 
-  h.onMessage([&start_v,&end_v,&cached_s,&sx,&sy,&sx2,&sy2,&num_messages,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&start_v,&cached_s,&sx,&sy,&sx2,&sy2,&num_messages,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -364,6 +363,8 @@ int main() {
         	
           int num_pts = 100;
           int max_pts_to_reuse = 0;
+
+          double t_inc = 0.02;
           // int num_pts_used = previous_path_x.size();
           int num_pts_used = cached_s.size() - previous_path_x.size(); // 0 - 0 = 0
           int num_pts_unused = cached_s.size() - num_pts_used;
@@ -388,6 +389,11 @@ int main() {
             double next_y = sy2(cached_s[i]);
             next_x_vals.push_back(next_x);
             next_y_vals.push_back(next_y);
+          }
+
+          if (num_pts_to_reuse >= 2)
+          {
+            start_v = (cached_s[num_pts_to_reuse - 1] - cached_s[num_pts_to_reuse - 2]) / t_inc;
           }
 
           cached_s = temp_cached_s; // {}
@@ -441,7 +447,6 @@ int main() {
           // double pos_s = pos_sd[0];
           // double pos_s = car_s;
 
-          double t_inc = 0.02;
           double max_a = 2;
           double max_v = 10;
           double traj_t = t_inc * num_pts;
@@ -450,11 +455,23 @@ int main() {
           // double end_v = min(car_speed + max_a * traj_t, max_v);
           // double end_v = 5;
           double end_v = min(start_v + max_a * traj_t, max_v);
+
+          // TODO:
+          /*
+          Kostas Oreopoulos [1:29 PM] 
+In case some else was struggling, The naive solution is always the best. To deal with the car speeding because s is linear and the car is in curves, the following seems to work pretty well.
+* once you have your splines and you can convert from s,d to xy in continuous fashion, then do the following
+* take for example from the point you are a distance of 100 meters (the next) and divide it in 4-5-6 points you want.
+Then for those all those points calculate the XY coodinates and add the distances  (1-2, 2-3.. etc) . You will get a distance Dxy.
+If its a straight line you are driving, then Ds (which is just the difference of the first and last points) should be equal to Dxy.
+Dxy > Ds, means you are turning, thus travelling a bigger distance. So the speed you said you liked... Dv, which was Ds/dt will in fact to Dxy/dt.
+So to compensate you should tell the vehicle to scale down the velocity by that factor (Ds / Dxy) OR , you can apply that directy to the distance you tell it to travel (more accurate )
+          */
           
 
           // double traj_t = (map_waypoints_s[next_waypoint]-car_s)/end_v;
           // double end_s = pos_s + 0.5 * max_a * traj_t * traj_t;
-          double end_s = pos_s + end_v * traj_t;
+          double end_s = pos_s + (start_v + end_v)/2 * traj_t;
           
 
           // vector<double> start = {pos_s, car_speed, 0};
@@ -488,7 +505,6 @@ int main() {
               next_s += poly[j] * pow(t_inc * i, j);
             }
             cached_s.push_back(next_s);
-            // cout << next_s << ", "; // TODO: these points don't seem right...make sure end_s is clear.
 
             // vector<double> next_xy = getXY(next_s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
             // double next_x = next_xy[0];
