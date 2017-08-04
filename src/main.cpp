@@ -339,6 +339,7 @@ int main() {
           vector<double> end;
           vector<double> poly;
           vector<double> temp_cached_s;
+          vector<double> new_s_vals;
           int num_pts;
           int max_pts_to_reuse;
           int num_pts_used;
@@ -374,8 +375,8 @@ int main() {
           end_v = min(start_v + max_a * traj_t, max_v);
           
           // TODO: should I change this back?
-          // end_s = car_s + (start_v + end_v)/2 * traj_t;
-          end_s = car_s + end_v * traj_t;
+          end_s = car_s + (start_v + end_v)/2 * traj_t;
+          // end_s = car_s + end_v * traj_t;
           
           start = {car_s, start_v, 0};
           
@@ -384,9 +385,10 @@ int main() {
           poly = JMT(start, end, traj_t);
 
           temp_cached_s = {};
+          new_s_vals = {};
 
-          for(int i = 0; i < num_pts; i++)
-          {
+          for(int i = 0; i < num_pts; i++) {
+
             double next_s;
 
             next_s = 0;
@@ -396,25 +398,52 @@ int main() {
               next_s += poly[j] * pow(t_inc * i, j);
             }
 
-            temp_cached_s.push_back(next_s);
-          }
+            new_s_vals.push_back(next_s);
 
-          // average with cached points
-
-          for (int i = 0; i < num_pts_to_reuse; ++i)
-          {
-            if (i == 0)
+            if (i == 0 && num_pts_to_reuse > 0)
             {
-              temp_cached_s[i] = cached_s[i + num_pts_used]; // trying to always use old point for first point
+              temp_cached_s.push_back(cached_s[i + num_pts_used]);
+            }
+            else if (i == 0 && num_pts_to_reuse <= 0)
+            {
+              temp_cached_s.push_back(new_s_vals[i]);
             }
             else
             {
-              temp_cached_s[i] = (temp_cached_s[i] + cached_s[i + num_pts_used])/2;
+              temp_cached_s.push_back(temp_cached_s[i-1] + (new_s_vals[i] - new_s_vals[i-1]));
             }
-
-            cout << temp_cached_s[i] << "\t" << cached_s[i + num_pts_used] << "\t" << (temp_cached_s[i] + cached_s[i + num_pts_used])/2 <<  endl;
           }
-          cout << endl;
+
+          // for(int i = 0; i < num_pts; i++)
+          // {
+          //   double next_s;
+
+          //   next_s = 0;
+
+          //   for (int j = 0; j < poly.size(); ++j)
+          //   {
+          //     next_s += poly[j] * pow(t_inc * i, j);
+          //   }
+
+          //   temp_cached_s.push_back(next_s);
+          // }
+
+          // // average with cached points
+
+          // for (int i = 0; i < num_pts_to_reuse; ++i)
+          // {
+          //   if (i == 0)
+          //   {
+          //     temp_cached_s[i] = cached_s[i + num_pts_used]; // trying to always use old point for first point
+          //   }
+          //   else
+          //   {
+          //     temp_cached_s[i] = (temp_cached_s[i] + cached_s[i + num_pts_used])/2;
+          //   }
+
+          //   // cout << temp_cached_s[i] << "\t" << cached_s[i + num_pts_used] << "\t" << (temp_cached_s[i] + cached_s[i + num_pts_used])/2 <<  endl;
+          // }
+          // cout << endl;
 
           for(int i = 0; i < num_pts; i++)
           {
