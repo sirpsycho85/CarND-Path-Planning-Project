@@ -12,7 +12,9 @@
 #include "json.hpp"
 #include "spline.h"
 
-          /*
+/*
+TODO: if other car is in same lane and (other_s - car_s)%max_s < safe_distance, set max_v lower
+
           TODO: Kostas Oreopoulos [1:29 PM] 
 In case some else was struggling, The naive solution is always the best. To deal with the car speeding because s is linear and the car is in curves, the following seems to work pretty well.
 * once you have your splines and you can convert from s,d to xy in continuous fashion, then do the following
@@ -25,7 +27,7 @@ So to compensate you should tell the vehicle to scale down the velocity by that 
 // TODO: things to try:
   // Spline assumes evenly spaced waypoints but our points are not.......
   // Marcus Erbar suggested: Appending deltas of new_path to previous_path[0]. Then, as a second step, smoothing appended_path with previous_path for a couple of timesteps (I think 20). That finally got rid of the seemingly random noise.
-          */
+*/
 
 #include <typeinfo>
 #include <map>
@@ -209,6 +211,11 @@ vector<double> JMT(vector< double> start, vector <double> end, double T) {
   return result;
 }
 
+int nearest_lane(double d) {
+  int lane = (int)((d - 2)/4 + 0.5);
+  return lane;
+}
+
 int main() {
 
   uWS::Hub h;
@@ -248,24 +255,6 @@ int main() {
   	map_waypoints_dy.push_back(d_y);
   }
 
-
-  // double map_x = 784.6001;
-  // double map_y = 1135.571;
-  // double map_s = 90.4504146575928;
-  // double d = 0;
-
-  // vector<double> gotten_XY = getXY(map_s, d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-  // cout << gotten_XY[0]<< " " << gotten_XY[1] << endl;
-  // cout << map_x<< " " << map_y << endl;
-
-  // vector<double> gotten_SD = getFrenet(map_x, map_y, 0, map_waypoints_x, map_waypoints_y);
-  // cout << gotten_SD[0] << endl;
-  // cout << map_s << endl;
-
-  // exit(EXIT_FAILURE);
-
-
-
   int lane = 1;
   double offset = 2 + 4 * lane;
 
@@ -285,11 +274,10 @@ int main() {
   sy2.set_points(map_waypoints_s, map_waypoints_y2);
 
   int num_messages = 0;
-
-  vector<double> cached_s = {};
+  vector<double> prev_s_vals = {};
   double start_v = 0;
 
-  h.onMessage([&start_v,&cached_s,&sx,&sy,&sx2,&sy2,&num_messages,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&max_s,&start_v,&prev_s_vals,&sx,&sy,&sx2,&sy2,&num_messages,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
 
     if (length && length > 2 && data[0] == '4' && data[1] == '2') {
@@ -320,7 +308,7 @@ int main() {
         	double end_path_d = j[1]["end_path_d"];
 
         	// Sensor Fusion Data, a list of all other cars on the same side of the road.
-        	auto sensor_fusion = j[1]["sensor_fusion"];
+        	auto sensor_fusion = j[1]["sensor_fusion"]; // [ id, x, y, vx, vy, s, d]
 
         	json msgJson;
 
@@ -338,7 +326,7 @@ int main() {
           vector<double> start;
           vector<double> end;
           vector<double> poly;
-          vector<double> temp_cached_s;
+          vector<double> next_s_vals;
           vector<double> new_s_vals;
           int num_pts;
           int max_pts_to_reuse;
@@ -346,6 +334,7 @@ int main() {
           int num_pts_unused;
           int num_pts_to_reuse;
           double t_inc;
+          double safe_distance;
 
 
         	
@@ -355,28 +344,43 @@ int main() {
 
           t_inc = 0.02;
 
-          num_pts_used = cached_s.size() - previous_path_x.size();
+          num_pts_used = prev_s_vals.size() - previous_path_x.size();
 
           num_pts_unused = previous_path_x.size();
 
           num_pts_to_reuse = min(num_pts_unused, max_pts_to_reuse);
 
-          if (num_pts_used >= 2)
-          {
-            start_v = (cached_s[num_pts_used - 1] - cached_s[num_pts_used - 2]) / t_inc;
+          if (num_pts_used >= 2) {
+            start_v = (prev_s_vals[num_pts_used - 1] - prev_s_vals[num_pts_used - 2]) / t_inc;
           }
 
-          max_a = 2;
+          max_a = 15;
           
-          max_v = 20;
+          max_v = 30;
+
+          safe_distance = 50;
+
+          for (int car_i = 0; car_i < sensor_fusion.size(); ++car_i)
+          {
+            int other_lane = nearest_lane(sensor_fusion[car_i][6]);
+            
+            int current_lane = nearest_lane(car_d);
+
+            int other_s = sensor_fusion[car_i][5];
+
+            double current_distance = fmod((car_s - other_s), max_s);
+
+            if (other_lane == current_lane && current_distance < safe_distance)
+            {
+              cout << "TOO CLOSE!" << endl;
+            }
+          }
           
           traj_t = t_inc * num_pts;
 
           end_v = min(start_v + max_a * traj_t, max_v);
           
-          // TODO: should I change this back?
           end_s = car_s + (start_v + end_v)/2 * traj_t;
-          // end_s = car_s + end_v * traj_t;
           
           start = {car_s, start_v, 0};
           
@@ -384,93 +388,47 @@ int main() {
 
           poly = JMT(start, end, traj_t);
 
-          temp_cached_s = {};
+          next_s_vals = {};
+
           new_s_vals = {};
 
           for(int i = 0; i < num_pts; i++) {
 
-            double next_s;
+            double new_s;
 
-            next_s = 0;
+            new_s = 0;
 
-            for (int j = 0; j < poly.size(); ++j)
-            {
-              next_s += poly[j] * pow(t_inc * i, j);
+            for (int j = 0; j < poly.size(); ++j) {
+              new_s += poly[j] * pow(t_inc * i, j);
             }
 
-            new_s_vals.push_back(next_s);
+            new_s_vals.push_back(new_s);
 
-            if (i == 0 && num_pts_to_reuse > 0)
-            {
-              temp_cached_s.push_back(cached_s[i + num_pts_used]);
+            if (i == 0 && num_pts_to_reuse > 0) {
+              next_s_vals.push_back(prev_s_vals[i + num_pts_used]);
             }
-            else if (i == 0 && num_pts_to_reuse <= 0)
-            {
-              temp_cached_s.push_back(new_s_vals[i]);
+
+            else if (i == 0 && num_pts_to_reuse <= 0) {
+              next_s_vals.push_back(new_s_vals[i]);
             }
-            else
-            {
-              temp_cached_s.push_back(temp_cached_s[i-1] + (new_s_vals[i] - new_s_vals[i-1]));
+
+            else {
+              next_s_vals.push_back(next_s_vals[i-1] + (new_s_vals[i] - new_s_vals[i-1]));
             }
           }
 
-          // for(int i = 0; i < num_pts; i++)
-          // {
-          //   double next_s;
-
-          //   next_s = 0;
-
-          //   for (int j = 0; j < poly.size(); ++j)
-          //   {
-          //     next_s += poly[j] * pow(t_inc * i, j);
-          //   }
-
-          //   temp_cached_s.push_back(next_s);
-          // }
-
-          // // average with cached points
-
-          // for (int i = 0; i < num_pts_to_reuse; ++i)
-          // {
-          //   if (i == 0)
-          //   {
-          //     temp_cached_s[i] = cached_s[i + num_pts_used]; // trying to always use old point for first point
-          //   }
-          //   else
-          //   {
-          //     temp_cached_s[i] = (temp_cached_s[i] + cached_s[i + num_pts_used])/2;
-          //   }
-
-          //   // cout << temp_cached_s[i] << "\t" << cached_s[i + num_pts_used] << "\t" << (temp_cached_s[i] + cached_s[i + num_pts_used])/2 <<  endl;
-          // }
-          // cout << endl;
-
-          for(int i = 0; i < num_pts; i++)
-          {
+          for(int i = 0; i < num_pts; i++) {
             double next_x;
             double next_y;
 
-            next_x = sx2(temp_cached_s[i]);
-            next_y = sy2(temp_cached_s[i]);
+            next_x = sx2(next_s_vals[i]);
+            next_y = sy2(next_s_vals[i]);
 
             next_x_vals.push_back(next_x);
             next_y_vals.push_back(next_y);
-
-            if (i < 10)
-            {
-              // cout << temp_cached_s[i] << ", ";
-            }
-            
           }
-          // cout << endl;
 
-          cached_s = temp_cached_s;
-
-          // for (int i = 0; i < next_x_vals.size(); ++i)
-          // {
-          //   cout << next_x_vals[i] << ", ";
-          // }
-          // cout<<endl;
+          prev_s_vals = next_s_vals;
 
         	msgJson["next_x"] = next_x_vals;
         	msgJson["next_y"] = next_y_vals;
